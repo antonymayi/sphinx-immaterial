@@ -50,8 +50,16 @@ def _apply_property_documenter_type_annotation_fix():
 
         # Check for return annotation
         retann = self.retann or _get_property_return_type(self.object)
-        if retann is not None:
-            self.add_line("   :type: " + retann, self.get_sourcename())
+        if retann is None:
+            return
+
+        # Check if type annotation has already been added.
+        for line in self.directive.result.data:
+            if line.startswith("   :type: "):
+                return
+
+        # Type annotation not already added.
+        self.add_line("   :type: " + retann, self.get_sourcename())
 
     PropertyDocumenter.add_directive_header = add_directive_header
 
