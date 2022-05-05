@@ -1,6 +1,7 @@
 """Fixes for the Python domain."""
 
 import json
+import re
 from typing import (
     cast,
     Sequence,
@@ -724,6 +725,36 @@ sphinx.domains.python.PythonDomain.object_types["parameter"] = sphinx.domains.Ob
 )
 
 
+def _maybe_strip_type_annotations(
+    app: sphinx.application.Sphinx,
+    domain: str,
+    objtype: str,
+    contentnode: sphinx.addnodes.desc_content,
+) -> None:
+    if domain != "py":
+        return
+    obj_desc = contentnode.parent
+    assert isinstance(obj_desc, sphinx.addnodes.desc)
+    strip_self_type_annotations = app.config.python_strip_self_type_annotations
+    strip_return_type_annotations = app.config.python_strip_return_type_annotations
+    for signode in obj_desc[:-1]:
+        if strip_self_type_annotations:
+            for param in signode.traverse(condition=sphinx.addnodes.desc_parameter):
+                if param.children[0].astext() == "self":
+                    # Remove any annotations on `self`
+                    del param.children[1:]
+                break
+        if strip_return_type_annotations is not None:
+            fullname = signode["fullname"]
+            modname = signode["module"]
+            if modname:
+                fullname = modname + "." + fullname
+            if strip_return_type_annotations.fullmatch(fullname):
+                # Remove return type.
+                for node in signode.traverse(condition=sphinx.addnodes.desc_returns):
+                    node.parent.remove(node)
+
+
 def _monkey_patch_python_domain_to_support_object_ids():
     for object_class in sphinx.domains.python.PythonDomain.directives.values():
         object_class.option_spec["object-ids"] = json.loads
@@ -785,6 +816,19 @@ def _monkey_patch_python_domain_to_support_object_ids():
     sphinx.domains.python.PyObject.handle_signature = handle_signature
 
 
+def _config_inited(
+    app: sphinx.application.Sphinx, config: sphinx.config.Config
+) -> None:
+
+    if (
+        config.python_strip_self_type_annotations
+        or config.python_strip_return_type_annotations
+    ):
+        if isinstance(config.python_strip_return_type_annotations, str):
+            config.python_strip_return_type_annotations = re.compile(
+                config.python_strip_return_type_annotations
+            )
+        app.connect("object-description-transform", _maybe_strip_type_annotations)
 
 
 def setup(app: sphinx.application.Sphinx):
@@ -807,6 +851,16 @@ def setup(app: sphinx.application.Sphinx):
     sphinx.domains.python.PythonDomain.initial_data["synopses"] = {}  # name -> synopsis
 
     app.add_role_to_domain("py", "param", PyParamXRefRole())
+    app.add_config_value(
+        "python_strip_self_type_annotations", default=True, rebuild="env", types=(bool,)
+    )
+    app.add_config_value(
+        "python_strip_return_type_annotations",
+        default=r".*.(__setitem__|__init__)",
+        rebuild="env",
+        types=(re.Pattern, type(None)),
+    )
+    app.connect("config-inited", _config_inited)
 
     return {
         "parallel_read_safe": True,
