@@ -1,11 +1,12 @@
 """Utilities for use with Sphinx."""
 
 import io
-from typing import Optional, Dict, Union, List
+from typing import Optional, Dict, Union, List, Tuple
 
 import docutils.nodes
 import docutils.parsers.rst.states
 import docutils.statemachine
+import sphinx.addnodes
 import sphinx.util.docutils
 from typing_extensions import Literal
 
@@ -156,3 +157,30 @@ def summarize_element_text(
             text = text[: sentence_end + 1]
     text = text.replace("\n", " ")
     return text.strip()
+
+
+def make_toctree_node(
+    state: docutils.parsers.rst.states.RSTState,
+    toc_entries: List[Tuple[str, str]],
+    options: dict,
+    source_path: str,
+    source_line: int = 0,
+) -> List[docutils.nodes.Node]:
+    # The Sphinx `toctree` directive parser cannot handle page names that
+    # include angle brackets.  Therefore, we use the directive to create an
+    # empty toctree node and then add the entries directly.
+    toctree_nodes = parse_rst(
+        state=state,
+        text=format_directive("toctree", options=options),
+        source_path=source_path,
+        source_line=source_line,
+    )
+    toctree: Optional[sphinx.addnodes.toctree] = None
+    for node in toctree_nodes[-1].traverse(condition=sphinx.addnodes.toctree):
+        toctree = node
+        break
+    if toctree is None:
+        raise ValueError("No toctree node found")
+    toctree["entries"].extend(toc_entries)
+    toctree["includefiles"].extend([path for _, path in toc_entries])
+    return toctree_nodes

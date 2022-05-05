@@ -43,6 +43,7 @@ extensions = [
     "sphinx.ext.doctest",
     "sphinx.ext.extlinks",
     "sphinx.ext.intersphinx",
+    "sphinx.ext.napoleon",
     "sphinx.ext.todo",
     "sphinx.ext.mathjax",
     "sphinx.ext.viewcode",
@@ -52,6 +53,7 @@ extensions = [
     "sphinx_immaterial.format_signatures",
     "sphinx_immaterial.cppreference",
     "sphinx_immaterial.json_domain",
+    "sphinx_immaterial.python_apigen",
     "sphinx_jinja",
 ]
 
@@ -64,7 +66,6 @@ intersphinx_mapping = {
 # documents.
 default_role = "any"
 
-autosummary_generate = True
 autoclass_content = "class"
 
 # Add any paths that contain templates here, relative to this directory.
@@ -268,6 +269,10 @@ jinja_contexts = {
 
 json_schemas = ["index_transform_schema.yml", "inheritance_schema.yml"]
 
+python_apigen_modules = {"tensorstore": "python_apigen_generated"}
+
+autodoc_class_signature = "separated"
+
 
 def _validate_parallel_build(app):
     # Verifies that all of the extensions defined by this theme support parallel
@@ -283,7 +288,7 @@ def _parse_object_description_signature(
     registry_option = registry.get(signature)
     node += sphinx.addnodes.desc_name(signature, signature)
     if registry_option is None:
-        logger.error("Invalid object description option: %r", signature)
+        logger.error("Invalid object description option: %r", signature, location=node)
     else:
         node += sphinx.addnodes.desc_sig_punctuation(" : ", " : ")
         annotations = sphinx.domains.python._parse_annotation(
@@ -308,7 +313,7 @@ def _parse_confval_signature(
     registry_option = values.get(signature)
     node += sphinx.addnodes.desc_name(signature, signature)
     if registry_option is None:
-        logger.error("Invalid config option: %r", signature)
+        logger.error("Invalid config option: %r", signature, location=node)
     else:
         default, rebuild, types = registry_option
         if isinstance(types, type):

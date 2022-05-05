@@ -7,6 +7,8 @@ import sphinx.addnodes
 import sphinx.domains
 import sphinx.domains.python
 import sphinx.ext.autodoc
+import sphinx.util.inspect
+import sphinx.util.typing
 
 property_sig_re = re.compile("^(\\(.*)\\)\\s*->\\s*(.*)$")
 
@@ -37,6 +39,32 @@ def _apply_property_documenter_type_annotation_fix():
         result = orig_import_object(self, raiseerror)
         if not result:
             return False
+
+        if sphinx.util.inspect.safe_getattr(self.object, "fget", None):  # property
+            func = self.object.fget
+        elif sphinx.util.inspect.safe_getattr(
+            self.object, "func", None
+        ):  # cached_property
+            func = self.object.func
+        else:
+            func = None
+
+        if func:
+            try:
+                signature = sphinx.util.inspect.signature(
+                    func, type_aliases=self.config.autodoc_type_aliases
+                )
+                if (
+                    signature.return_annotation
+                    is not sphinx.util.inspect.Parameter.empty
+                ):
+                    self.retann = sphinx.util.typing.stringify(
+                        signature.return_annotation
+                    )
+                return True
+            except TypeError:
+                pass
+
         if not self.retann:
             self.retann = _get_property_return_type(self.object)
         return True
